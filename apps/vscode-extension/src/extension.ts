@@ -1,57 +1,77 @@
 import * as vscode from 'vscode';
-import { RuptureScanner } from './scanner';
-import { RuptureDiagnostics } from './diagnostics';
-import { RuptureTreeProvider } from './treeProvider';
+import { EOLkitsScanner } from './scanner';
+import { EOLkitsDiagnostics } from './diagnostics';
+import { EOLkitsTreeProvider } from './treeProvider';
+import { resolveSetting } from './settings';
 
-let scanner: RuptureScanner;
-let diagnostics: RuptureDiagnostics;
-let treeProvider: RuptureTreeProvider;
+let scanner: EOLkitsScanner;
+let diagnostics: EOLkitsDiagnostics;
+let treeProvider: EOLkitsTreeProvider;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Rupture extension activated');
+    console.log('EOLkits extension activated');
 
     // Initialize components
-    diagnostics = new RuptureDiagnostics();
-    scanner = new RuptureScanner(diagnostics);
-    treeProvider = new RuptureTreeProvider();
+    diagnostics = new EOLkitsDiagnostics();
+    scanner = new EOLkitsScanner(diagnostics);
+    treeProvider = new EOLkitsTreeProvider();
 
     // Register tree view
-    vscode.window.registerTreeDataProvider('rupture.deprecations', treeProvider);
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('eolkits.deprecations', treeProvider),
+        diagnostics
+    );
 
     // Register commands
     context.subscriptions.push(
-        vscode.commands.registerCommand('rupture.scanWorkspace', () => {
-            scanWorkspace();
+        vscode.commands.registerCommand('eolkits.scanWorkspace', (resource?: vscode.Uri) => {
+            void scanWorkspace(resource);
+        }),
+        vscode.commands.registerCommand('eolkits.showReport', () => {
+            showReport();
+        }),
+        vscode.commands.registerCommand('eolkits.getAudit', () => {
+            vscode.env.openExternal(vscode.Uri.parse('https://ntoledo319.github.io/EOLkits/audit/?utm_source=vscode&utm_medium=extension&source=vscode'));
+        }),
+        vscode.commands.registerCommand('rupture.scanWorkspace', (resource?: vscode.Uri) => {
+            void scanWorkspace(resource);
         }),
         vscode.commands.registerCommand('rupture.showReport', () => {
             showReport();
         }),
         vscode.commands.registerCommand('rupture.getAudit', () => {
-            vscode.env.openExternal(vscode.Uri.parse('https://ntoledo319.github.io/Rupture/audit'));
+            vscode.env.openExternal(vscode.Uri.parse('https://ntoledo319.github.io/EOLkits/audit/?utm_source=vscode&utm_medium=extension&source=vscode'));
         })
     );
 
     // Auto-scan on save
-    vscode.workspace.onDidSaveTextDocument((document) => {
-        const config = vscode.workspace.getConfiguration('rupture');
-        if (config.get<boolean>('autoScan', true)) {
-            scanner.scanDocument(document);
-        }
-    });
+    context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            const config = vscode.workspace.getConfiguration('eolkits', document.uri);
+            const legacyConfig = vscode.workspace.getConfiguration('rupture', document.uri);
+            if (resolveSetting(config, legacyConfig, 'autoScan', true)) {
+                void scanner.scanDocument(document);
+            }
+        })
+    );
 
     // Initial workspace scan
-    scanWorkspace();
+    void scanWorkspace();
 }
 
-async function scanWorkspace() {
+async function scanWorkspace(resource?: vscode.Uri) {
     const progressOptions = {
         location: vscode.ProgressLocation.Window,
-        title: 'Rupture: Scanning for AWS deprecations...'
+        title: 'EOLkits: Scanning for AWS deprecations...'
     };
 
     await vscode.window.withProgress(progressOptions, async (progress) => {
+        diagnostics.clear();
+        const include = resource
+            ? new vscode.RelativePattern(resource, '**/*.{yaml,yml,json,jsonc,tf,hcl,js,jsx,ts,tsx,py}')
+            : '**/*.{yaml,yml,json,jsonc,tf,hcl,js,jsx,ts,tsx,py}';
         const files = await vscode.workspace.findFiles(
-            '**/*.{yaml,yml,json,tf,js,ts,py}',
+            include,
             '**/node_modules/**'
         );
 
@@ -62,7 +82,7 @@ async function scanWorkspace() {
             try {
                 const document = await vscode.workspace.openTextDocument(file);
                 await scanner.scanDocument(document);
-            } catch (e) {
+            } catch {
                 // Skip files that can't be opened
             }
             progress.report({ increment: (i / files.length) * 100 });
@@ -71,12 +91,13 @@ async function scanWorkspace() {
         // Update tree view
         const findings = diagnostics.getAllFindings();
         treeProvider.updateFindings(findings);
+        await vscode.commands.executeCommand('setContext', 'eolkits.hasDeprecations', findings.length > 0);
 
         // Show summary
         const count = findings.length;
         if (count > 0) {
             vscode.window.showWarningMessage(
-                `Rupture found ${count} potential deprecation issue${count === 1 ? '' : 's'}.`,
+                `EOLkits found ${count} potential deprecation issue${count === 1 ? '' : 's'}.`,
                 'View Report'
             ).then(selection => {
                 if (selection === 'View Report') {
@@ -84,7 +105,7 @@ async function scanWorkspace() {
                 }
             });
         } else {
-            vscode.window.showInformationMessage('Rupture: No deprecation issues found.');
+            vscode.window.showInformationMessage('EOLkits: No deprecation issues found.');
         }
     });
 }
@@ -93,8 +114,8 @@ function showReport() {
     const findings = diagnostics.getAllFindings();
 
     const panel = vscode.window.createWebviewPanel(
-        'ruptureReport',
-        'Rupture Deprecation Report',
+        'eolkitsReport',
+        'EOLkits Deprecation Report',
         vscode.ViewColumn.One,
         {}
     );
@@ -105,16 +126,22 @@ function showReport() {
 function generateReportHtml(findings: any[]): string {
     const rows = findings.map(f => `
         <tr>
-            <td><span class="severity ${f.severity}">${f.severity}</span></td>
-            <td>${f.message}</td>
-            <td>${f.file}</td>
-            <td>Line ${f.line}</td>
+            <td><span class="severity ${escapeHtml(f.severity)}">${escapeHtml(f.severity)}</span></td>
+            <td>${escapeHtml(f.message)}</td>
+            <td>${escapeHtml(f.file)}</td>
+            <td>Line ${escapeHtml(String(f.line))}</td>
         </tr>
     `).join('');
+    const interestLink = findings.length > 0
+        ? `<p><strong>Would you consider a one-time $299 repository evidence report?</strong>
+            <a href="https://github.com/ntoledo319/EOLkits/issues/new?template=audit-interest.yml">Record nonbinding Audit interest</a>
+            in a public GitHub form. Do not include project, company, security, or personal data.</p>`
+        : '';
 
     return `<!DOCTYPE html>
     <html>
     <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
         <style>
             body { font-family: sans-serif; padding: 20px; }
             table { width: 100%; border-collapse: collapse; }
@@ -128,7 +155,7 @@ function generateReportHtml(findings: any[]): string {
         </style>
     </head>
     <body>
-        <h1>Rupture Deprecation Report</h1>
+        <h1>EOLkits Deprecation Report</h1>
         <p>Found ${findings.length} issue(s)</p>
         <table>
             <tr>
@@ -139,11 +166,22 @@ function generateReportHtml(findings: any[]): string {
             </tr>
             ${rows}
         </table>
-        <p><a href="https://ntoledo319.github.io/Rupture/audit">Get full audit report →</a></p>
+        ${interestLink}
+        <p><a href="https://ntoledo319.github.io/EOLkits/audit/?utm_source=vscode&utm_medium=extension&source=vscode">Get repository evidence report →</a></p>
     </body>
     </html>`;
 }
 
+function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[character] as string));
+}
+
 export function deactivate() {
-    console.log('Rupture extension deactivated');
+    console.log('EOLkits extension deactivated');
 }

@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 
-export class RuptureDiagnostics {
+export class EOLkitsDiagnostics implements vscode.Disposable {
     private diagnosticCollection: vscode.DiagnosticCollection;
     private allFindings: Map<string, Finding[]> = new Map();
 
     constructor() {
-        this.diagnosticCollection = vscode.languages.createDiagnosticCollection('rupture');
+        this.diagnosticCollection = vscode.languages.createDiagnosticCollection('eolkits');
     }
 
     setFindings(uri: vscode.Uri, findings: Finding[]): void {
@@ -23,7 +23,7 @@ export class RuptureDiagnostics {
                 this.severityToDiagnostic(f.severity)
             );
             diagnostic.code = f.code;
-            diagnostic.source = 'Rupture';
+            diagnostic.source = 'EOLkits';
 
             return diagnostic;
         });
@@ -33,7 +33,7 @@ export class RuptureDiagnostics {
 
     getAllFindings(): Finding[] {
         const result: Finding[] = [];
-        for (const [uri, findings] of this.allFindings) {
+        for (const findings of this.allFindings.values()) {
             result.push(...findings);
         }
         return result.sort((a, b) => this.severityRank(b.severity) - this.severityRank(a.severity));
@@ -41,6 +41,11 @@ export class RuptureDiagnostics {
 
     clear(): void {
         this.diagnosticCollection.clear();
+        this.allFindings.clear();
+    }
+
+    dispose(): void {
+        this.diagnosticCollection.dispose();
         this.allFindings.clear();
     }
 
