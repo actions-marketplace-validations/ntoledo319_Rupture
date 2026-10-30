@@ -32,7 +32,7 @@ jobs:
       VSCODE_BASELINE_DOWNLOADS: '199'
       VSCODE_SIGNAL_GATE_AT: '2026-09-05T23:27:55Z'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
