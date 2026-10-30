@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: '24'
       - run: mkdir -p "$TMPDIR" "$npm_config_cache"
-      - run: npm ci && npm test
+      - run: npm ci --no-audit && npm test
         working-directory: kits/lambda-lifeline
 
   worker:
@@ -58,7 +58,7 @@ jobs:
         with:
           node-version: '20'
       - run: mkdir -p "$TMPDIR" "$npm_config_cache"
-      - run: npm ci && npm run build && npm test
+      - run: npm ci --no-audit && npm run build && npm test
         working-directory: apps/worker
 
   grace-api:
@@ -119,7 +119,7 @@ jobs:
       - name: Reject stale or unrendered commerce output
         run: |
           set -euo pipefail
-          if grep -REn '\{API_URL\}|\{\{|\}\}' \
+          if grep -REn '\{API_URL\}|\{SITE_URL\}|\{\{|\}\}' \
             docs/audit/index.html docs/pack/index.html docs/license/index.html docs/partners/index.html; then
             echo "::error::Unrendered placeholder found"; exit 1
           fi
@@ -142,7 +142,7 @@ jobs:
         with:
           node-version: '20'
       - run: mkdir -p "$TMPDIR" "$npm_config_cache"
-      - run: npm ci && npm test && npm run package
+      - run: npm ci --no-audit && npm test && npm run package
         working-directory: apps/vscode-extension
 
   github-action:
@@ -188,6 +188,8 @@ jobs:
             echo "::error::Action report points at the obsolete custom-domain funnel"
             exit 1
           fi
+      - name: Test acquisition evidence reduction
+        run: node --test scripts/vscode-gallery-evidence.test.mjs
 
   containers:
     runs-on: ubuntu-latest
@@ -197,7 +199,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build ${{ matrix.dockerfile }}
-        run: docker build --file "${{ matrix.dockerfile }}" .
+        run: |
+          set -euo pipefail
+          dockerfile='${{ matrix.dockerfile }}'
+          image_ref="eolkits-ci:$(basename "$(dirname "$dockerfile")")"
+          docker build --tag "$image_ref" --file "$dockerfile" .
+          test "$(docker image inspect --format '{{.Config.User}}' "$image_ref")" = \
+            '10001:10001'
+          test "$(docker image inspect --format '{{index .Config.Entrypoint 0}}' "$image_ref")" = \
+            '/usr/local/bin/eolkits-container-entrypoint'
+          test "$(docker run --rm --entrypoint /usr/local/bin/eolkits-container-entrypoint \
+            "$image_ref" sh -c umask)" = '0077'
 
   dependency-audit:
     runs-on: ubuntu-latest
@@ -208,7 +220,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Audit locked Python graphs and Node runtime licenses
         run: |
           mkdir -p "$TMPDIR" "$PIP_CACHE_DIR"
@@ -223,8 +235,29 @@ jobs:
             kits/lambda-lifeline/package-lock.json \
             apps/worker/package-lock.json \
             apps/vscode-extension/package-lock.json
-          npm audit --omit=dev --audit-level=high --prefix kits/lambda-lifeline
-          npm audit --omit=dev --audit-level=high --prefix apps/worker
+          npm_major="$(npm --version | cut -d. -f1)"
+          if (( npm_major < 11 )); then
+            echo "::error::npm 11+ is required; older clients fall back to the retired quick-audit endpoint"
+            exit 1
+          fi
+          audit_lockfile() {
+            local prefix="$1"
+            local attempt
+            for attempt in 1 2 3; do
+              if timeout 120s npm audit --package-lock-only --omit=dev \
+                --audit-level=high --prefix "$prefix"; then
+                return 0
+              fi
+              if (( attempt == 3 )); then
+                echo "::error::npm audit failed after $attempt attempts for $prefix"
+                return 1
+              fi
+              echo "::warning::npm audit attempt $attempt failed for $prefix; retrying"
+              sleep "$((attempt * 5))"
+            done
+          }
+          audit_lockfile kits/lambda-lifeline
+          audit_lockfile apps/worker
 
   lint:
     runs-on: ubuntu-latest
@@ -247,3 +280,42 @@ jobs:
             echo "::error::Distribution copy points at the obsolete custom-domain funnel"
             exit 1
           fi
+      - name: Validate the fail-closed GRACE deployment contract
+        run: |
+          set -euo pipefail
+          mkdir -p "$TMPDIR"
+          shellcheck --severity=warning \
+            deploy/grace/container-entrypoint.sh \
+            deploy/grace/deploy-api-closed.sh \
+            deploy/grace/ship-web.sh \
+            deploy/grace/snapshot-api-volume.sh
+          env_file="$TMPDIR/compose-validation.env"
+          printf '%s\n' \
+            'STRIPE_KEY=sk_test_dummy' \
+            'STRIPE_WEBHOOK_SECRET=whsec_test' \
+            'RESEND_API_KEY=re_test' \
+            'EOLKITS_INTERNAL_URL_SECRET=validation-only-32-byte-secret-value' \
+            'EOLKITS_AUDIT_CHECKOUT_ENABLED=0' \
+            'EOLKITS_API_PORT=8120' > "$env_file"
+          chmod 0600 "$env_file"
+          reviewed_sha='0123456789abcdef0123456789abcdef01234567'
+          rendered="$(
+            EOLKITS_ENV_FILE="$env_file" \
+            EOLKITS_BUILD_SHA="$reviewed_sha" \
+            EOLKITS_AUDIT_CHECKOUT_ENABLED=0 \
+              docker compose --project-name eolkits-api \
+              --file deploy/grace/docker-compose.eolkits-api.yml \
+              --env-file "$env_file" config --format json
+          )"
+          jq -e --arg sha "$reviewed_sha" '
+            (.name == "eolkits-api") and
+            (.services["eolkits-api"] as $service |
+              $service.image == ("eolkits-api:" + $sha) and
+              $service.user == "10001:10001" and
+              $service.read_only == true and
+              ($service.cap_drop | index("ALL")) != null and
+              ($service.security_opt | index("no-new-privileges:true")) != null and
+              $service.environment.EOLKITS_AUDIT_CHECKOUT_ENABLED == "0" and
+              any($service.ports[];
+                .host_ip == "127.0.0.1" and .published == "8120" and .target == 8080))
+          ' <<< "$rendered"

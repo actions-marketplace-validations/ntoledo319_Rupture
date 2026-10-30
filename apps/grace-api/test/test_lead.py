@@ -130,6 +130,105 @@ def test_lead_notify_success_marks_notified(tmp_path, monkeypatch):
     assert mod.store.count_unnotified() == 0
 
 
+def test_lead_alert_reply_to_is_the_prospect(tmp_path, monkeypatch):
+    mod, client = _load_app(tmp_path, monkeypatch, LEAD_NOTIFY_TO="owner@toledo.test")
+    calls = []
+    monkeypatch.setattr(mod, "send_email", lambda settings, **k: calls.append(k))
+    r = client.post("/api/v1/lead", json={"email": "warm@lead.com", "product": "ToledoWeb"})
+    assert r.status_code == 200
+    assert [c["to"] for c in calls] == ["owner@toledo.test"]
+    assert calls[0]["reply_to"] == "warm@lead.com"
+
+
+def test_lead_alert_subject_is_tagged_with_the_site(tmp_path, monkeypatch):
+    mod, client = _load_app(tmp_path, monkeypatch, LEAD_NOTIFY_TO="owner@toledo.test")
+    subjects = []
+    monkeypatch.setattr(mod, "send_email", lambda settings, **k: subjects.append(k["subject"]))
+    forms = [
+        ("sitelift-fit-check", "SiteLift"),
+        ("toledoweb-migration-audit", "ToledoWeb"),
+        ("apps.toledotechnologies.com/contact", "General Toledo Apps inquiry"),
+        ("mobile.toledotechnologies.com", "Delphi Mobile Discovery"),
+        ("ai.toledotechnologies.com", "Delphi Automation Blueprint"),
+        ("toledotechnologies.com/care", "Care plans"),
+        ("", "Mystery"),
+    ]
+    for i, (source, product) in enumerate(forms):
+        body = {
+            "email": f"lead{i}@lead.com",
+            "source": source,
+            "product": product,
+            "message": f"Our booking site number {i} needs online payments before the holidays.",
+        }
+        assert client.post("/api/v1/lead", json=body).status_code == 200
+    assert subjects == [
+        "[SiteLift] New lead: SiteLift",
+        "[ToledoWeb] New lead: ToledoWeb",
+        "[ToledoApps] New lead: General Toledo Apps inquiry",
+        "[ToledoMobile] New lead: Delphi Mobile Discovery",
+        "[ToledoAI] New lead: Delphi Automation Blueprint",
+        "[Toledo Technologies] New lead: Care plans",
+        "New lead: Mystery",
+    ]
+
+
+def test_suspect_lead_subject_keeps_the_site_tag_first(tmp_path, monkeypatch):
+    mod, client = _load_app(tmp_path, monkeypatch, LEAD_NOTIFY_TO="owner@toledo.test")
+    subjects = []
+    monkeypatch.setattr(mod, "send_email", lambda settings, **k: subjects.append(k["subject"]))
+    body = {"email": "bare@lead.com", "source": "sitelift-fit-check", "product": "SiteLift"}
+    assert client.post("/api/v1/lead", json=body).status_code == 200
+    assert subjects == ["[SiteLift] Likely spam: New lead: SiteLift"]
+
+
+def _post_leads(client, forms):
+    for i, (source, product) in enumerate(forms):
+        body = {
+            "email": f"route{i}@lead.com",
+            "source": source,
+            "product": product,
+            "message": f"Our booking site number {i} needs online payments before the holidays.",
+        }
+        assert client.post("/api/v1/lead", json=body).status_code == 200
+
+
+def test_toledo_leads_use_toledo_inbox_sender_and_key(tmp_path, monkeypatch):
+    mod, client = _load_app(
+        tmp_path,
+        monkeypatch,
+        LEAD_NOTIFY_TO="leads@eolkits.test",
+        TOLEDO_LEAD_NOTIFY_TO="leads@toledo.test",
+        TOLEDO_RESEND_API_KEY="re_toledo",
+    )
+    calls = []
+    monkeypatch.setattr(mod, "send_email", lambda settings, **k: calls.append(k))
+    _post_leads(client, [("sitelift-fit-check", "SiteLift"), ("eolkits.com/pricing", "Audit")])
+    toledo, eolkits = calls
+    assert (toledo["to"], toledo["api_key"]) == ("leads@toledo.test", "re_toledo")
+    assert toledo["sender"] == "Toledo Technologies <noreply@toledotechnologies.com>"
+    assert (eolkits["to"], eolkits["api_key"], eolkits["sender"]) == (
+        "leads@eolkits.test",
+        None,
+        None,
+    )
+
+
+def test_toledo_inbox_without_toledo_key_keeps_default_sender(tmp_path, monkeypatch):
+    mod, client = _load_app(
+        tmp_path,
+        monkeypatch,
+        LEAD_NOTIFY_TO="leads@eolkits.test",
+        TOLEDO_LEAD_NOTIFY_TO="leads@toledo.test",
+    )
+    calls = []
+    monkeypatch.setattr(mod, "send_email", lambda settings, **k: calls.append(k))
+    _post_leads(client, [("apps.toledotechnologies.com/contact", "Apps"), ("", "Mystery")])
+    assert [(c["to"], c["sender"], c["api_key"]) for c in calls] == [
+        ("leads@toledo.test", None, None),
+        ("leads@eolkits.test", None, None),
+    ]
+
+
 def test_lead_notify_failure_is_durable_and_recoverable(tmp_path, monkeypatch):
     # Resend outage: the lead must still be captured, left notified=0 (not silently
     # dropped), and then self-heal when the re-send sweep runs after email recovers.

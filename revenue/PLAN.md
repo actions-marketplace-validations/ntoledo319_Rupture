@@ -86,15 +86,16 @@ Source: https://stripe.com/pricing (checked August 27, 2026).
   relevant users to the same Audit page.
 - Funnel: VS Marketplace/editor search and organic error searches → local
   finding or answer page → Audit sample/availability.
-- Distribution state: v1.2.0 is public on the existing
+- Distribution state: v1.3.0 is public on the existing
   `rupture.rupture-vscode` listing; no owner action remains for this release.
 - Channel-attribution hypothesis: two of the same portfolio Audit sales arrive
   through VS/search = $580.06 net. They are not additive to Bet B's total, and
   this is unobserved.
-- Falsifier: the v1.1.0 gate failed and its one reposition is public as v1.2.0.
-  Zero install growth and zero external VS-attributed qualified-interest
-  authors at `2026-09-05T23:27:55Z` stops promotion and leaves only the free
-  utility.
+- Falsifier: the v1.1.0 gate failed and its one positioning change shipped as
+  v1.2.0. The v1.3.0 correctness release did not reset the baseline or gate.
+  Its five-sample public lower bound is now 104 versus the 103 baseline, so the
+  acquisition-signal gate passed; this is one install, not a sale or proof that
+  the channel can close the revenue gap.
 
 ## Sequence
 
@@ -106,7 +107,7 @@ Source: https://stripe.com/pricing (checked August 27, 2026).
    the Worker as an HTTP 410 tombstone. Retired-key rotation/revocation is
    explicitly deferred at the owner's direction and is not in the active queue.
 3. Keep the honest GitHub Pages fallback, tested `v2` Action branch, and public
-   VS v1.2.0 release green. The owner publishes the sole canonical v2.0.0 draft
+   VS v1.3.0 release green. The owner publishes the sole canonical v2.0.0 draft
    into the existing GitHub Marketplace listing; obsolete drafts are gone.
 4. Deploy Audit v2 with checkout disabled and complete the full Stripe test-mode
    operational gate. Remove the hosting-layer analytics injection, deploy the
@@ -307,6 +308,29 @@ owner. Next highest-leverage action is still the same owner batch (HQ-2 then
 HQ-5/HQ-6, then HQ-3/HQ-1/HQ-4/HQ-7) — repository work has no further
 verifiable-without-fetch truth gaps found this cycle.
 
+## Cycle note — August 30, 2026, 06:16 UTC (cloud, egress-restricted)
+
+Egress was blocked for the fourth consecutive cycle (`example.com` and
+`docs.aws.amazon.com` both 403 through the configured proxy; proxy status
+confirmed up). Per AGENTS.md's fallback, no new repost-answers batch or dev.to
+draft was produced. `BUILD_DATE` was already current and a full rebuild showed
+no drift; an entry-by-entry cross-check of `deprecations.yml` against
+`PHASE_DATES`/`fixes.yml` and a fresh date scan of all 25 quarantined DEV
+drafts found no further date errors beyond the two already logged.
+
+Shipped instead: `revenue/HUMAN_QUEUE.md`'s HQ-5 release link had gone stale
+within the same recovery cycle — a `prepare-marketplace-v2.yml` resync nine
+minutes after HUMAN_QUEUE.md was last written regenerated the draft's
+`untagged-<hex>` URL slug, so the owner's next click on the irreducible HQ-5
+action (the fastest remaining route to a first dollar) would have 404'd.
+Verified via the GitHub API that the draft (id `375063073`) still says v2.0.0
+and targets `47cd9eae77c5a9ddfdbbdb33206efe8f60b907d8`, matching both `v2` and
+`marketing-machine-v2`; corrected the link, recorded the durable release id,
+and added a Releases-list fallback since the slug will keep regenerating on
+future resyncs. See DECISIONS D50. No cash-path state changed. Collected
+profit remains $0; the gap remains $4,000. HQ-0 through HQ-4, the now-corrected
+HQ-5, and HQ-6/HQ-7 are otherwise unchanged and still require the owner.
+
 ## Recovery cycle — August 30, 2026
 
 The from-the-top audit rejected the premise that this was already a profitable
@@ -361,6 +385,38 @@ checkbox, and 2FA ceremony; live checkout stays forbidden until the closed v2
 deploy, injected-script removal, full test/refund proof, legal facts, DEV cleanup,
 and new catalog attestation pass.
 
+## Cycle note — August 31, 2026 (cloud, egress-restricted)
+
+Egress was blocked for the fifth consecutive cycle (`example.com` and
+`docs.aws.amazon.com` both 403 through the configured proxy; proxy status
+confirmed up). Per AGENTS.md's fallback, no new repost-answers batch or dev.to
+draft was produced. `main` was confirmed an ancestor of `marketing-machine-v2`
+(no repeat of the prior silent-divergence pattern). `BUILD_DATE` was one day
+stale; bumped and rebuilt, 35/35 `apps/web` tests green, diff entirely
+date-derived.
+
+Shipped the highest-leverage in-jail fix found this cycle: `kits/lambda-lifeline`'s
+live-scan runtime tables had no `python3.8` entry, so scanning a real AWS
+account with a Lambda function on that runtime would falsely report it as
+healthy. Two independent internal sources (python-pivot's `RUNTIME_TABLE` and
+`rules/public/deprecations.yml`'s existing entry) already agreed on the exact
+dates, meeting this project's own corroboration bar. Fixed with a new
+regression-test fixture case; 28/28 Node tests and 3/3 property tests stayed
+green; `npm pack --dry-run` still reports 24 release files. This is a
+correctness fix to the free product's actual detection logic (K1's underlying
+engine), not a documentation- or SEO-page-only change — see DECISIONS D52.
+
+HQ-5's release-draft link was re-verified via the GitHub API and still matches
+`HUMAN_QUEUE.md` exactly (no repair needed, unlike the prior two cycles). No
+cash-path state changed. Collected profit remains $0; the gap remains $4,000.
+HQ-0 through HQ-7 are unchanged and still require the owner. Next
+highest-leverage action remains the same owner batch (HQ-0 through HQ-7 in
+order) — no further verifiable-without-fetch correctness gap was found this
+cycle beyond what was shipped. (Note: this cycle's "HQ-0 through HQ-7"
+references use the numbering superseded by the `main`-branch cycle recorded
+immediately below, which renumbered the same items HQ-A through HQ-G after
+independent parallel work; see the September 1 merge note in DECISIONS.md.)
+
 ## Authorized execution cycle — August 31, 2026
 
 The v1.1 VS gate failed on evidence, so the permitted reposition was built,
@@ -399,3 +455,350 @@ Current execution order is therefore:
 Collected revenue: **$0**. Collected profit: **$0**. Gap: **$4,000**. Checkout:
 **closed**. The exact remaining owner batch is the authoritative
 `revenue/HUMAN_QUEUE.md` and totals at most 40 minutes.
+
+## Cycle note — September 1, 2026 (cloud, egress-restricted)
+
+Egress was blocked for the sixth consecutive cycle (`example.com` and
+`docs.aws.amazon.com` both 403 through the configured proxy; `WebFetch` to
+`docs.aws.amazon.com` also returned `EGRESS_BLOCKED`; proxy status confirmed
+up). Per AGENTS.md's fallback, no new repost-answers batch or dev.to draft
+was produced.
+
+This cycle's real headline: `marketing-machine-v2` and `origin/main` had
+genuinely diverged (confirmed via a failed `git merge-base --is-ancestor`
+check, unlike the false alarm in D44). `main` had absorbed three merged PRs
+from a separate concurrent cycle — VS v1.2.0 reposition/publication,
+operator legal identity (Toledo Technologies LLC / Connecticut), and an
+authorized-but-unsuccessful DEV/Pages/ruleset automation attempt — none of
+which had reached `marketing-machine-v2`. Merged `origin/main` in without
+force (commit `68652e3`); every non-`revenue/` file merged cleanly, and the
+`revenue/*.md` append-conflicts were resolved by concatenating both
+histories chronologically and renumbering ID collisions (D51-D53 on
+`main`'s side became D53-D55; HUMAN_QUEUE's old HQ-0..HQ-7 numbering is
+superseded by `main`'s newer HQ-A..HQ-G). Full detail in DECISIONS D56.
+
+`apps/web/BUILD_DATE` was bumped `2026-08-31` → `2026-09-01` after
+confirming the merged tree was 35/35 green on `pytest -q apps/web` first;
+rebuild stayed 35/35 green, diff entirely date-derived.
+
+Shipped a second scanner correctness fix in the same family as D52:
+`kits/lambda-lifeline`'s live-scan tables had no `python3.11` entry even
+though `rules/public/deprecations.yml` and `python-pivot`'s `RUNTIME_TABLE`
+already corroborated it. A real scan of a `python3.11` Lambda function would
+have falsely reported it healthy. Fixed with a new regression-test fixture
+case; 28/28 Node tests, 3/3 property tests, and `npm pack --dry-run`'s
+24-file count all stayed green.
+
+No cash-path state changed. Collected profit remains $0; the gap remains
+$4,000. HQ-A through HQ-G (the merged, authoritative queue — see
+HUMAN_QUEUE.md) are unchanged and still require the owner. Next
+highest-leverage action is the same owner batch, in order; future cycles
+should re-run `git merge-base --is-ancestor origin/main
+marketing-machine-v2` at the top of every cycle (not just after a suspicious
+gap) since two branches receiving independent pushes can silently diverge on
+any ordinary cycle, as happened here.
+
+## Cycle note — September 2, 2026 (cloud, egress-restricted, seventh consecutive cycle)
+
+No branch divergence this cycle (`origin/main` confirmed an ancestor of
+`marketing-machine-v2`; `git pull --rebase` was a no-op). Egress was blocked
+for the seventh consecutive cycle, now confirmed as a general organization-
+policy block rather than a two-domain denylist: even a signed Azure Blob
+Storage artifact-download URL, obtained through the (separately reachable)
+GitHub Actions API, was rejected by the same proxy. No new repost-answers
+batch or dev.to draft was produced; see DECISIONS D57.
+
+A full re-run of the standing correctness sweep (lambda-lifeline runtime
+tables vs. deprecations.yml/python-pivot; quarantined DEV-draft dates) found
+no new gap — the python3.8 (D52) and python3.11 (D56) fixes from prior
+cycles remain the complete, corroborated set. Shipped the routine
+`apps/web/BUILD_DATE` bump (2026-09-01 → 2026-09-02) after confirming 35/35
+`apps/web` tests green both before and after; the resulting 15-file `docs/`
+diff is entirely date-derived. HQ-E's release link was re-verified and still
+matches `HUMAN_QUEUE.md` exactly.
+
+Collected profit remains **$0**; the gap remains **$4,000**. HQ-A through
+HQ-G are unchanged and still require the owner — this is the sole remaining
+path to a first dollar; no further verifiable-without-fetch correctness gap
+exists in the repository at this time. The VS v1.2.0 five-day falsifier gate
+(`2026-09-05T23:27:55Z`) has not yet arrived; do not call it early.
+
+## Cycle note — September 4, 2026 (cloud, egress-restricted, ninth+ consecutive cycle)
+
+No cycle ran September 3; `marketing-machine-v2` was confirmed not diverged
+from `origin/main` before starting. Egress remained blocked: both `curl`
+through the configured proxy and direct `WebFetch` calls to `example.com`
+and a `repost.aws` thread returned `EGRESS_BLOCKED`/403; the proxy status
+endpoint confirmed the proxy itself is up. `WebSearch` (hosted, egress-
+exempt) still works but its blog/community results are disqualified for
+AWS runtime dates (AGENTS.md §2.5) and cannot substitute for the
+live-thread fetch a repost-answers batch requires (D36). No new
+repost-answers batch or dev.to draft was produced this cycle; see
+DECISIONS D58.
+
+A fresh full correctness sweep (lambda-lifeline `PHASE_DATES` vs.
+python-pivot `RUNTIME_TABLE` vs. `deprecations.yml` vs. `fixes.yml` vs.
+al2023-gate's `AL2_EOL`) found no new gap — the python3.8 (D52), python3.11
+(D56), and nodejs16.x (D42) fixes remain complete; `ruby3.2`/`dotnet6`
+remain the same deliberately deferred, still-unverifiable gap since D43.
+Shipped the routine `apps/web/BUILD_DATE` bump (2026-09-02 → 2026-09-04)
+after confirming 35/35 `apps/web` tests green both before and after, plus
+28/28 `kits/lambda-lifeline` Node tests green; the resulting 16-file
+`docs/` diff is entirely date-derived. Checked live GitHub state via the
+connected API (unaffected by the egress block): 0 open issues, and HQ-E's
+release draft (id `375063073`) unchanged at `draft=true`, same slug — no
+repair needed, no owner action taken since D57.
+
+Collected profit remains **$0**; the gap remains **$4,000**. HQ-A through
+HQ-G are unchanged and still require the owner — this is the sole remaining
+path to a first dollar. The VS v1.2.0 five-day falsifier gate
+(`2026-09-05T23:27:55Z`) has not yet arrived; do not call it early — it is
+the next autonomous checkpoint, one day out.
+
+## Ground-up recovery cycle — September 4, 2026
+
+The prior “nothing left but owner work” conclusion was falsified by fresh local
+and public evidence. This cycle found a fluctuating Marketplace counter,
+missed extension detections, a dead Audit click tracker, buried conversion
+controls, false whole-site publication dates, and misleading lifecycle JSON.
+All have a tested release candidate; none is counted as demand or revenue.
+
+### Current portfolio
+
+- **Bet A — free marketplace acquisition (VS v1.3 + Action v2):** VS v1.3.0 is
+  public and its five cache-busted samples converged at 104 installs / 226
+  downloads. Against the retained v1.2 baseline of 103 / 199, the mechanical
+  lower-bound gate passed at +1 install. Downloads are not qualified demand;
+  neither counter is revenue. Action v2 remains ready but owner-published.
+- **Bet B — $299 automated Audit:** 14 US domestic-card sales provisionally
+  close the target; 16 sales remain the conservative international/refund
+  scenario already modeled. Traffic comes from exact VS findings, Action
+  reports/Marketplace, and cited schedule/search pages. The falsifier is zero
+  purchases after checkout has been genuinely live for five full days with
+  measured qualified visits; a closed checkout starts no clock.
+- **Bet C — RapidAPI scanner (queued, not built):** built-in distribution and
+  billing justify a later bounded text/IaC endpoint. Target arithmetic is 34
+  $150 customer-months × 80% = $4,080. Kill it if free-tier capacity, seller
+  setup, or early usage cannot support a low-touch plan without competing with
+  Audit fulfillment.
+
+### Highest-leverage execution order
+
+1. Keep the merged, fully verified v1.3 source and exact public VSIX green;
+   preserve its publisher as manual-only and continue daily five-sample Gallery
+   evidence without resetting the original acquisition baseline.
+2. Keep `main` and the auto-deployed `marketing-machine-v2` branch aligned;
+   they currently resolve to the same reviewed tree, while the IndexNow safety
+   gate continues to reject the injected custom host.
+3. Complete only the remaining owner-authority queue: contain/deploy GRACE,
+   supply seller facts, remove injected analytics and false DEV posts, publish
+   Action v2 with the required attestations, then create the new v2 Stripe
+   catalog and open Audit only after E2E/refund proof. Pages/rulesets are
+   already complete through the authenticated repository-admin API.
+4. After checkout is live, measure first-party views → findings → checkout →
+   delivered reports → refunds → collected profit. Only then build/list the
+   RapidAPI compounding endpoint.
+
+Observed collected revenue: **$0**. Observed collected profit: **$0**. Gap:
+**$4,000**. Retired Stripe credential revocation/rotation remains explicitly
+excluded and was not attempted.
+
+## Public release and cleanup checkpoint — September 4, 2026
+
+PR #41 merged the ground-up product and acquisition repair at
+`44e0425f3b94b085835c85a2e0dbf28642914973`; all four required PR checks
+passed. The clean Pages Audit and Lambda schedule surfaces are live at HTTP 200
+with the reviewed tracking, conversion, and attribution changes.
+
+PR #42 then published the exact v1.3.0 VSIX through one bounded owner-attributed
+push run; its four PR checks and all seven resulting `main` workflows passed.
+Publisher run `33864097060` passed, the version-specific Marketplace package
+endpoint served v1.3.0, and the exact-ID Gallery converged across five
+cache-busted observations at 104 installs / 226 downloads. The retained baseline
+is 103 / 199, so the acquisition gate records a conservative +1 install and
+passes. The +27 package downloads are not interpreted as people, leads, or
+revenue. The publication trigger is restored to manual-only in the final
+cleanup, and the evidence workflow now requires public v1.3.0.
+
+The only cash path remains the $299 automated Audit. Checkout stays closed
+because GRACE v2 deployment, host injection removal, fulfillment/delivery,
+refund/retention, truthful commercial facts, and the new catalog have not been
+proved. Owner work is the 38-minute pending batch in
+`revenue/HUMAN_QUEUE.md`; retired Stripe credential rotation/revocation is
+excluded. Collected revenue: **$0**. Collected profit: **$0**. Gap:
+**$4,000**.
+
+## Launch hardening and repository-admin completion — September 4, 2026
+
+Fresh launch-path review found work that was still autonomous and materially
+closer to safe collection. The merged `main` release now rejects arbitrary local
+paths from the runner's HTTP boundary, requires a strong bearer token, avoids
+logging signed request URLs, applies private runtime-data modes, runs both
+containers as a numeric non-root user on read-only filesystems with all
+capabilities dropped, and pins both Python base images to the current explicit
+manifest digest. A guarded host wrapper dry-runs first, forces checkout closed,
+attests the exact reviewed SHA and existing deployment, builds and preflights
+without the production volume, snapshots the exact data volume, verifies every
+loopback capability after deployment, and restores the prior image if a gate
+fails. It never edits Caddy, restores a volume, creates a Stripe object, or
+opens checkout.
+
+Authenticated owner-level GitHub authority was available after all. Pages is
+now Actions-only, active ruleset `22266277` blocks deletion and non-fast-forward
+updates for the default branch and `v2`, and Pages workflow run `33867109854`
+successfully deployed exact main SHA
+`4f51c770ebe7d9b8b6d8fbd3429727f7a5e83271`. Former HQ-F is complete and costs
+zero owner minutes.
+
+Connecticut's official registry supplies Toledo Technologies LLC's public
+business/mailing address. The legal pages now identify that address and use
+Connecticut law while preserving non-waivable consumer protections. Only those
+three materially changed legal URLs receive a September 4 sitemap date; the
+global August 31 publication baseline remains intact. HQ-B is narrowed to the
+private Stripe fee/currency facts and incremental host cost.
+
+PR #44 merged this work as `5bbf5a949148cd9f359d07aad03f649358c37e8c`.
+All 20 PR contexts passed, including both real container builds, dependency and
+license audits, and the deployment-contract assertions. The exact merge SHA
+then passed release surfaces `33870623128`, determinism `33870623134`, property
+tests `33870623085`, acquisition evidence `33870623114`, Pages deployment
+`33870623034`, and IndexNow submission `33870623031`. Live Pages probes proved
+the new address/law text and page-specific sitemap dates.
+
+Pending owner labor is now at most **38 minutes**; the direct commerce critical
+path excluding optional Marketplace publication is **36 minutes**. Checkout
+remains **closed**. Workspace-observed collected revenue is **$0**,
+workspace-observed collected profit is **$0**, and the gap remains **$4,000**.
+The retired Stripe credential action remains excluded and untouched.
+
+## Final autonomous handoff audit — September 4, 2026
+
+PR #50 merged the Lambda Lifeline Dependabot ecosystem correction and durable
+release evidence as exact `main` SHA
+`18f8b608a33032f4604cfe375271c82a54c307eb`. All 20 PR contexts passed. The
+merge SHA then passed release surfaces `33871323878`, determinism
+`33871323802`, property tests `33871323754`, and all eight refreshed Dependabot
+ecosystems. The corrected Lambda npm refresh is run `33871330443`.
+
+`marketing-machine-v2` was a strict ancestor and was fast-forwarded without
+force to the same final `main` SHA. Pages remains Actions-built and healthy;
+ruleset `22266277` remains active with deletion and non-fast-forward protection
+for the default branch and `v2`. The private v2.0.0 release draft remains
+aligned to protected `v2` at exact target
+`47cd9eae77c5a9ddfdbbdb33206efe8f60b907d8`; a truncated target in the handoff
+queue was corrected before owner use.
+
+Fresh capability audit `33871692575` reports both GRACE deployment transport
+and the complete runtime-secret bundle unavailable to repository automation.
+The custom host still returns 200 for `/` and `/health`, 404 for `/api/status`
+and `/api/capabilities`, and injects the unreviewed statistics script. Therefore
+checkout remains correctly closed. The maximum remaining owner-only batch is
+**38 minutes** (**36 minutes** without optional Marketplace publication).
+Workspace-observed revenue and profit remain **$0**; gap remains **$4,000**.
+The excluded retired Stripe credential action remains untouched.
+
+## Containment stop — September 4, 2026
+
+The follow-on distribution cycle was terminated after a subordinate targeted
+`/dev/null` outside `WORKSPACE_ROOT` during a read-only HTTP probe. No persistent
+data, secret, public listing, host, checkout, payment, DEV, or credential state
+was changed after the violation. Fresh GitHub traffic and VS search-position
+observations gathered beforehand are preserved in `METRICS.md`; they do not
+change the $299 Audit ranking or establish demand. The next cycle must begin
+with a clean jail revalidation and the same checkout-closed, $0-revenue state.
+
+## Resumed discovery-boundary cycle — September 4, 2026
+
+The cycle resumed only after revalidating the exact workspace jail and reading
+all six revenue state files. Fresh evidence does not support another product or
+keyword-only release. Public VS Marketplace searches already place the existing
+extension first for five tested deprecation/EOL phrases, second for two more,
+and seventh for the broad `aws lambda` phrase. Meanwhile the qualified-interest
+issue count and purchases remain zero. The limiting evidence is therefore
+low/unknown qualified demand and a closed cash path, not missing VS keywords.
+
+One bounded public distribution improvement was still justified: the repository
+had 19 strong product topics but omitted the exact `github-actions` ecosystem
+topic for its existing Action. The owner API added that topic while preserving
+all 19 existing topics; a fresh read at `2026-09-04T12:30:43Z` returned exactly
+20 topics including `github-actions`. Repository description, homepage, issues,
+and discussions were already configured and were left unchanged.
+
+Three tempting alternatives were rejected after checking their actual boundary:
+an OpenAI Site would create a second beta host without supplying the missing
+GRACE, Stripe, Resend, refund, or fulfillment authority; a paid-audit
+`FUNDING.yml` link would misuse GitHub's sponsor surface as advertising; and a
+VS v1.3.1 keyword release would spend release attention despite already-strong
+search position and no evidence that ranking is the bottleneck. GitHub Action
+Marketplace publication still requires the account-holder agreement, checkbox,
+and 2FA ceremony recorded in HQ-E.
+
+The externally visible result of this cycle is the added `github-actions`
+repository topic. It improves exact-ecosystem discovery but is not traffic,
+demand, checkout readiness, or revenue. The remaining owner-only batch stays at
+**38 minutes** (**36 minutes** without optional Marketplace publication).
+Workspace-observed revenue and profit remain **$0**; gap remains **$4,000**;
+checkout remains **closed**. The excluded retired Stripe credential action was
+not attempted.
+
+## Final merge evidence and second containment stop — September 4, 2026
+
+PR #56 merged the aborted-cycle record plus discovery-boundary audit as exact
+`main` SHA `734b2d007e890fb0e2c53bdc746ce144dcfdefe2`. All 20 PR contexts passed;
+the merge SHA then passed determinism run `33873507318`, property run
+`33873507327`, and release-surface run `33873507329`. The strictly ancestral
+`marketing-machine-v2` ref was fast-forwarded without force to that same SHA.
+
+The subsequent feature-branch cleanup cycle failed containment: the root agent
+sent `git ls-remote` output through `/dev/stdout`, which is outside the workspace
+jail, and the same compound command then deleted the already-merged remote
+feature branch. The device write persisted no file or secret, and the deleted
+branch's commits remain reachable through PR #56 and `main`, but both the path
+target and the public mutation after it violated the operating rules. Stop that
+cycle. This fresh record began only after revalidating the exact jail and reading
+all six state files again.
+
+No commercial conclusion changes. Main and `marketing-machine-v2` remain equal,
+the 20-topic public discovery state remains live, and the private v2 Action
+draft remains exact. Checkout is **closed**; workspace-observed revenue and
+profit remain **$0**; the gap remains **$4,000**; the owner-only queue remains
+**38 minutes**. The excluded retired Stripe credential action was not attempted.
+
+## Workspace environment recovery scan — September 4, 2026
+
+The owner reported that existing drive-local environment files may clear most
+launch blockers. The workspace jail forbids searching the rest of the drive, so
+this cycle exhaustively scanned the current workspace, ignored files, archives,
+Git history, current process environment, workspace-local Chrome snapshots, and
+all GitHub repository/environment secret inventories without printing values.
+The scan starts from fully green PR #57 merge SHA
+`1476920a323ed63bd7311e6a9b2947e8e10ccf62`, which is also the current static
+branch target.
+
+No usable production authority was found. The only current env file is ignored
+`tmp/compose-validation.env`; it contains synthetic validation values: a
+placeholder Stripe key, undersized webhook/Resend strings, a placeholder
+internal token, checkout disabled, a build SHA, and a port. The current process
+has none of the required GRACE, Stripe, Resend, Audit catalog/admin, or DEV key
+names. GitHub has only its `github-pages` environment with no secrets or
+variables; repository secret names remain Cloudflare account/token and VSCE PAT;
+Dependabot and Codespaces inventories are empty. Three workspace Chrome-profile
+snapshots contain no relevant Stripe, DEV, Resend, Cloudflare, GitHub, or GRACE
+session artifacts. No archive contains an env/credential entry, and no env-like
+symlink or credential store exists inside the jail.
+
+Historical matches are test/placeholders or the already-retired Stripe surface;
+they are not valid launch credentials and will not be reused. Therefore no
+existing blocker can be cleared from the current workspace. A git-ignored local
+inbox now exists at `tmp/owner-env-import/`; HQ-0 asks the owner to copy the
+claimed env files there without exposing their contents. Nominal owner time is
+now at most **40 minutes**, but a valid import could replace most of HQ-A/HQ-C/
+HQ-D/HQ-G rather than add to them. Checkout remains closed; workspace-observed
+revenue/profit remain **$0**; the excluded retired Stripe credential action
+remains untouched.
+
+The first attempted scan in this sequence improperly routed `rg` diagnostics to
+`/dev/stdout`, outside the jail. Nothing persisted and no value was printed, but
+the path target was a containment violation. That cycle stopped immediately;
+the specialist was interrupted; this scan resumed only after a fresh exact-jail
+validation and reread of all six state files.

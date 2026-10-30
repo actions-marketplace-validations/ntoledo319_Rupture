@@ -25,13 +25,22 @@ import requests
 from fastapi import BackgroundTasks, FastAPI, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from starlette.datastructures import Headers
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import pricing
+from . import lead_pages, pricing
 from .config import settings
 from .email import EmailDeliveryError, render_audit_delivery_email, send_email
 from .preflight import validate_runtime_preflight
 from .security import sha256_hex, verify_stripe_signature
-from .store import Store
+from .store import (
+    LEAD_ALERT_STATUSES,
+    LEAD_EMAIL_KEYS,
+    LEAD_NAME_KEYS,
+    LIKELY_SPAM_PREFIX,
+    LeadScreen,
+    Store,
+)
 from .stripe_client import (
     cancel_subscription,
     create_checkout_session,
@@ -130,6 +139,16 @@ class BoundedRequestBodyMiddleware:
             return settings.max_form_bytes
         return None
 
+    @staticmethod
+    def _reject(scope: dict[str, Any], status_code: int, detail: str) -> Response:
+        # A native HTML form post to the lead endpoint gets a readable page with
+        # the same status; every other request gets the same JSON as always.
+        if scope.get("path") == "/api/v1/lead":
+            request_headers = Headers(scope=scope)
+            if lead_pages.is_browser_form_navigation(request_headers):
+                return _lead_page(request_headers, {}, status_code, detail)
+        return JSONResponse({"detail": detail}, status_code=status_code)
+
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         limit = self._limit(scope)
         if limit is None:
@@ -141,14 +160,10 @@ class BoundedRequestBodyMiddleware:
         if raw_length:
             try:
                 if int(raw_length) > limit:
-                    await JSONResponse({"detail": "request body too large"}, status_code=413)(
-                        scope, receive, send
-                    )
+                    await self._reject(scope, 413, "request body too large")(scope, receive, send)
                     return
             except ValueError:
-                await JSONResponse({"detail": "invalid content length"}, status_code=400)(
-                    scope, receive, send
-                )
+                await self._reject(scope, 400, "invalid content length")(scope, receive, send)
                 return
 
         body = bytearray()
@@ -160,9 +175,7 @@ class BoundedRequestBodyMiddleware:
                 continue
             body.extend(message.get("body") or b"")
             if len(body) > limit:
-                await JSONResponse({"detail": "request body too large"}, status_code=413)(
-                    scope, receive, send
-                )
+                await self._reject(scope, 413, "request body too large")(scope, receive, send)
                 return
             if not message.get("more_body", False):
                 break
@@ -204,9 +217,29 @@ def initialize_runtime_state() -> None:
     global _audit_catalog_attested
     result = validate_runtime_preflight(settings)
     _audit_catalog_attested = bool(result["catalog_attested"])
-    settings.uploads_dir.mkdir(parents=True, exist_ok=True)
-    settings.reports_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_directory(settings.data_dir)
+    _ensure_private_directory(settings.uploads_dir)
+    _ensure_private_directory(settings.reports_dir)
+    database_files = [Path(str(settings.db_path) + suffix) for suffix in ("", "-wal", "-shm")]
+    # Reject links and non-files before sqlite has an opportunity to follow or
+    # open them. Broken symlinks deliberately fail too (`exists()` is false).
+    for database_file in database_files:
+        if database_file.is_symlink() or (database_file.exists() and not database_file.is_file()):
+            raise RuntimeError(f"refusing unsafe database path: {database_file.name}")
     store.init()
+    for database_file in database_files:
+        if database_file.exists():
+            database_file.chmod(0o600)
+
+
+def _ensure_private_directory(path: Path) -> None:
+    """Create or tighten a customer-data directory without following a leaf symlink."""
+    if path.is_symlink():
+        raise RuntimeError(f"refusing symlinked data directory: {path.name}")
+    path.mkdir(parents=True, mode=0o700, exist_ok=True)
+    if not path.is_dir():
+        raise RuntimeError(f"data path is not a directory: {path.name}")
+    path.chmod(0o700)
 
 
 app = FastAPI(title="EOLkits GRACE API", version="1.0.0", lifespan=lifespan)
@@ -386,7 +419,7 @@ async def upload_presign(request: Request) -> dict[str, Any]:
 
     upload_id = secrets.token_urlsafe(18).replace("-", "").replace("_", "")[:24]
     upload_token = secrets.token_urlsafe(32)
-    settings.uploads_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_directory(settings.uploads_dir)
     if shutil.disk_usage(settings.uploads_dir).free - size < settings.min_free_disk_bytes:
         raise HTTPException(status_code=503, detail="upload storage temporarily unavailable")
     if not store.reserve_upload(
@@ -435,11 +468,12 @@ async def upload_file(upload_id: str, request: Request, token: str = "") -> dict
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid content length") from exc
     path = _upload_path(upload_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_directory(path.parent)
     digest = hashlib.sha256()
     received = 0
     try:
         with path.open("xb") as handle:
+            os.fchmod(handle.fileno(), 0o600)
             async for chunk in request.stream():
                 received += len(chunk)
                 if received > settings.max_upload_bytes:
@@ -734,18 +768,10 @@ async def reconcile_refund(
 # ---- generic lead capture (studio microsites + any product) ------------------ #
 
 # Inbound forms use heterogeneous field names; these are the priority orders for
-# the two identity columns. Everything else is preserved verbatim in `fields`.
-_EMAIL_KEYS = ("email", "Email", "e-mail", "your-email", "your_email")
-_NAME_KEYS = (
-    "name",
-    "Name",
-    "full_name",
-    "fullname",
-    "contact",
-    "company",
-    "Business",
-    "agency_name",
-)
+# the two identity columns (defined beside the lead screening rules, which read
+# them too). Everything else is preserved verbatim in `fields`.
+_EMAIL_KEYS = LEAD_EMAIL_KEYS
+_NAME_KEYS = LEAD_NAME_KEYS
 
 # Pragmatic email shape check — rejects obvious junk without trying to be RFC 5322.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -788,41 +814,105 @@ def _esc(value: Any) -> str:
     return str(value or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _lead_email_html(product: str, source: str, fields: dict[str, str]) -> str:
+def _lead_email_html(
+    product: str, source: str, fields: dict[str, str], screen_reason: str | None = None
+) -> str:
     rows = "".join(
         f"<tr><td style='padding:4px 12px 4px 0;color:#6b7280;font-size:13px;vertical-align:top'>{_esc(k)}</td>"
         f"<td style='padding:4px 0;font-size:13px'><strong>{_esc(v)}</strong></td></tr>"
         for k, v in fields.items()
+    )
+    # Only a lead screened as 'suspect' carries this line; an 'ok' lead's alert
+    # is exactly what it always was.
+    screened = (
+        '<p style="margin:0 0 16px;padding:8px 12px;background:#fef3c7;color:#78350f;'
+        f'font-size:13px;border-radius:6px">Screened as likely spam: {_esc(screen_reason)}. '
+        "Stored like every lead; check before replying.</p>"
+        if screen_reason
+        else ""
     )
     return (
         '<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;'
         'max-width:600px;margin:0 auto;padding:24px;line-height:1.5">'
         f"<h2 style=\"margin:0 0 4px\">New lead &mdash; {_esc(product) or 'studio'}</h2>"
         f"<p style=\"margin:0 0 16px;color:#6b7280;font-size:13px\">via {_esc(source) or 'website'}</p>"
+        f"{screened}"
         f'<table style="border-collapse:collapse;width:100%">{rows}</table>'
         '<p style="font-size:12px;color:#9ca3af;margin-top:24px">Captured by the GRACE lead bus '
         "(/api/v1/lead). Reply directly to reach the prospect.</p></body></html>"
     )
 
 
+# Which site a lead came from, for the alert subject tag. Most specific first:
+# the bare toledotechnologies.com rule must not swallow its subdomains.
+_LEAD_SITE_RULES = (
+    (re.compile(r"sitelift"), "SiteLift"),
+    (re.compile(r"toledoweb|\bweb\.toledotechnologies\.com"), "ToledoWeb"),
+    (re.compile(r"\bapps\.toledotechnologies\.com"), "ToledoApps"),
+    (re.compile(r"\bmobile\.toledotechnologies\.com"), "ToledoMobile"),
+    (re.compile(r"\bai\.toledotechnologies\.com"), "ToledoAI"),
+    (re.compile(r"toledotechnologies\.com"), "Toledo Technologies"),
+    (re.compile(r"eolkits"), "EOLkits"),
+)
+
+
+def _lead_site_label(source: str, product: str) -> str:
+    """Site name for a lead's alert subject, or "" when no rule matches."""
+    text = f"{source} {product}".lower()
+    return next((label for pattern, label in _LEAD_SITE_RULES if pattern.search(text)), "")
+
+
 def _send_lead_notification(
-    lead_id: int, product: str, source: str, fields: dict[str, str]
+    lead_id: int,
+    product: str,
+    source: str,
+    fields: dict[str, str],
+    status: str = "ok",
+    screen_reason: str | None = None,
 ) -> None:
     """Owner alert for a captured lead. The lead ROW is already durable; this only
     flips `notified=1` after a CONFIRMED send. It retries transient failures and, if
     every attempt fails, logs LOUDLY and leaves `notified=0` so the row surfaces in
     the recovery queue — instead of silently dropping the way FormSubmit did one layer
-    up. `resend_unnotified_leads` then self-heals once email recovers. Never raises."""
-    recipients = [a.strip() for a in (settings.lead_notify_to or "").split(",") if a.strip()]
+    up. `resend_unnotified_leads` then self-heals once email recovers. Never raises.
+
+    Only 'ok' and 'suspect' leads are alerted; a 'suspect' alert's subject starts
+    with "Likely spam: " and its body says why."""
+    if status not in LEAD_ALERT_STATUSES:
+        logger.info("LEAD %s screened as %s; owner not alerted", lead_id, status)
+        return
+    site = _lead_site_label(source, product)
+    toledo = bool(site) and site != "EOLkits"
+    notify_to = settings.lead_notify_to
+    sender = api_key = None
+    budget_key = "email-lead-day:global"
+    if toledo and settings.toledo_lead_notify_to:
+        notify_to = settings.toledo_lead_notify_to
+    if toledo and settings.toledo_resend_api_key:
+        # Toledo's own Resend account: its own sender and its own daily quota.
+        sender, api_key = settings.toledo_email_from, settings.toledo_resend_api_key
+        budget_key = "email-lead-day:toledo"
+    recipients = [a.strip() for a in (notify_to or "").split(",") if a.strip()]
     if not recipients:
         logger.error("LEAD %s captured but LEAD_NOTIFY_TO is empty — OWNER NOT ALERTED", lead_id)
         return
-    html = _lead_email_html(product, source, fields)
+    suspect = status == "suspect"
+    html = _lead_email_html(
+        product, source, fields, (screen_reason or "screening rules") if suspect else None
+    )
     subject = f"New lead: {product or 'studio inquiry'}"
+    if suspect:
+        subject = LIKELY_SPAM_PREFIX + subject
+    # The site tag leads, so an inbox sorted by subject groups each site together.
+    if site:
+        subject = f"[{site}] {subject}"
+    # Replying to the alert should reach the prospect, as the footer promises.
+    prospect = next((fields[k].strip() for k in _EMAIL_KEYS if fields.get(k)), "")
+    reply_to = prospect if _EMAIL_RE.match(prospect) else None
     sent = 0
     for to in recipients:
         if not store.allow_rate(
-            "email-lead-day:global",
+            budget_key,
             limit=settings.lead_notification_daily_limit,
             window_seconds=86400,
         ):
@@ -838,6 +928,9 @@ def _send_lead_notification(
                     to=to,
                     subject=subject,
                     html=html,
+                    reply_to=reply_to,
+                    sender=sender,
+                    api_key=api_key,
                     idempotency_key=(
                         f"eolkits-lead-{lead_id}-" f"{hashlib.sha256(to.encode()).hexdigest()[:12]}"
                     ),
@@ -872,15 +965,31 @@ def resend_unnotified_leads(max_batch: int = 50) -> dict[str, int]:
     """Re-attempt owner alerts for any durably-captured lead not yet confirmed-sent.
     Idempotent; runs once at startup and then on a cadence from the drain loop
     (LEAD_SWEEP_INTERVAL_SECONDS) — no external cron required. Self-heals a transient
-    email outage without ever touching the (already durable) lead rows."""
+    email outage without ever touching the (already durable) lead rows. Spam and
+    duplicates are never in the queue; a suspect lead keeps its "Likely spam: "."""
     pending = store.unnotified_leads(limit=max_batch)
     for row in pending:
         try:
             fields = json.loads(row.get("fields") or "{}")
         except Exception:
-            fields = {}
+            fields = None
+        if not isinstance(fields, dict):
+            # `fields` is cut at 4000 characters when stored, so a long message
+            # leaves invalid JSON. Never re-send the owner an alert without the
+            # contact details: fall back to the identity columns plus the raw text.
+            fallback = {
+                "email": row.get("email") or "",
+                "name": row.get("name") or "",
+                "details (shortened when stored)": row.get("fields") or "",
+            }
+            fields = {k: v for k, v in fallback.items() if v}
         _send_lead_notification(
-            int(row["id"]), row.get("product") or "", row.get("source") or "", fields
+            int(row["id"]),
+            row.get("product") or "",
+            row.get("source") or "",
+            fields,
+            row.get("status") or "ok",
+            row.get("status_reason"),
         )
     remaining = store.count_unnotified()
     if remaining:
@@ -912,8 +1021,34 @@ def _resolve_next(next_url: str, request: Request) -> str:
     return ""
 
 
-def _respond(target: str, payload: dict[str, Any]) -> Response:
-    return RedirectResponse(target, status_code=303) if target else JSONResponse(payload)
+def _respond(target: str, payload: dict[str, Any], page_for: Request | None = None) -> Response:
+    if target:
+        return RedirectResponse(target, status_code=303)
+    if page_for is not None:
+        # A native form post without a usable `_next` would otherwise land on raw JSON.
+        return _lead_page(page_for.headers, {}, 200, sent=True)
+    return JSONResponse(payload)
+
+
+def _lead_page(
+    headers: Headers,
+    raw: dict[str, str],
+    status_code: int,
+    detail: Any = None,
+    *,
+    sent: bool = False,
+    retry_after: str | None = None,
+) -> Response:
+    """The readable page a browser form navigation gets instead of raw JSON. Its
+    "Go back" link is only ever an allow-listed studio site (`_SITE_ORIGINS`)."""
+    link = lead_pages.return_link(
+        referer=headers.get("referer") or "",
+        origin=headers.get("origin") or "",
+        next_value=raw.get("_next") or raw.get("next") or "",
+        allowed_origins=_SITE_ORIGINS,
+    )
+    kind = "sent" if sent else lead_pages.kind_for(status_code, detail)
+    return lead_pages.render(kind, status_code, link, retry_after)
 
 
 @app.post("/api/v1/lead")
@@ -924,27 +1059,52 @@ async def capture_lead(request: Request, background_tasks: BackgroundTasks) -> R
     lead durably, fires an owner notification over the working email path, and
     303-redirects to `_next` (preserving the prior FormSubmit UX) — or returns
     JSON when no redirect target is given. Replaces FormSubmit, which silently
-    dropped every submission at mxroute."""
+    dropped every submission at mxroute.
+
+    A browser form navigation (see `lead_pages.is_browser_form_navigation`) that
+    fails, or succeeds without a usable `_next`, gets a small HTML page with the
+    same status code instead of raw JSON. Every other client takes the unchanged
+    path below and gets exactly the responses it always got."""
     raw: dict[str, str] = {}
+    if not lead_pages.is_browser_form_navigation(request.headers):
+        return await _capture_lead(request, background_tasks, raw, browser=False)
+    try:
+        return await _capture_lead(request, background_tasks, raw, browser=True)
+    except StarletteHTTPException as exc:
+        retry_after = (exc.headers or {}).get("Retry-After")
+        return _lead_page(
+            request.headers, raw, exc.status_code, exc.detail, retry_after=retry_after
+        )
+    except Exception:
+        logger.exception("lead capture failed during a native form submission")
+        return _lead_page(request.headers, raw, 500)
+
+
+async def _capture_lead(
+    request: Request, background_tasks: BackgroundTasks, raw: dict[str, str], *, browser: bool
+) -> Response:
+    # `raw` is filled in place so the caller can still find the form's site
+    # (`_next`) for the error page's "Go back" link.
     try:
         form = await request.form()
         for k, v in form.multi_items():
             k, v = str(k), str(v)
             raw[k] = f"{raw[k]}, {v}" if k in raw else v  # join checkbox arrays
     except Exception:
-        raw = {}
+        raw.clear()
     if not raw:
         try:
             body = await request.json()
             if isinstance(body, dict):
-                raw = {str(k): str(v) for k, v in body.items()}
+                raw.update({str(k): str(v) for k, v in body.items()})
         except Exception:
-            raw = {}
+            raw.clear()
 
+    page_for = request if browser else None
     target = _resolve_next(raw.get("_next") or raw.get("next") or "", request)
     # Honeypot: bots fill the hidden _honey field. Accept silently; record nothing.
     if raw.get("_honey") or raw.get("_gotcha"):
-        return _respond(target, {"ok": True})
+        return _respond(target, {"ok": True}, page_for)
 
     fields = {k: v for k, v in raw.items() if not k.startswith("_") and str(v).strip()}
     email = next((fields[k] for k in _EMAIL_KEYS if fields.get(k)), "")
@@ -954,16 +1114,35 @@ async def capture_lead(request: Request, background_tasks: BackgroundTasks) -> R
     for control in ("product", "source", "next"):
         fields.pop(control, None)
     if not email or not _EMAIL_RE.match(email.strip()):
-        raise HTTPException(status_code=400, detail="A valid email is required.")
+        raise HTTPException(status_code=400, detail=lead_pages.INVALID_EMAIL_DETAIL)
     if not _consume_lead_capture_allowance(request):
         raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
 
+    # Every lead is stored and answered the same way, whatever screening says:
+    # spam learns nothing from the response. `record_lead` screens the lead in
+    # the same transaction that stores it; the status only decides the alert.
     lead_id = store.record_lead(
         email=email, name=name, product=product, source=source, fields=fields
     )
     store.record_event("lead", {"source": source, "sku": product, "meta": {"lead_id": lead_id}})
-    background_tasks.add_task(_send_lead_notification, lead_id, product, source, fields)
-    return _respond(target, {"ok": True, "lead_id": lead_id})
+    status, reason = _stored_screen(lead_id)
+    if status in LEAD_ALERT_STATUSES:
+        background_tasks.add_task(
+            _send_lead_notification, lead_id, product, source, fields, status, reason
+        )
+    else:
+        logger.info("LEAD %s stored as %s (%s); owner not alerted", lead_id, status, reason)
+    return _respond(target, {"ok": True, "lead_id": lead_id}, page_for)
+
+
+def _stored_screen(lead_id: int) -> LeadScreen:
+    """The screening result stored with a lead. If it cannot be read, the lead
+    is alerted as 'ok': an extra alert is better than a missed lead."""
+    try:
+        return store.lead_screen(lead_id)
+    except Exception:  # noqa: BLE001 — the lead is stored; never fail the request
+        logger.exception("LEAD %s: screening status unreadable; alerting as usual", lead_id)
+        return LeadScreen("ok", "")
 
 
 # ---- webhooks ---------------------------------------------------------------- #
@@ -1239,7 +1418,43 @@ def cleanup_expired_artifacts(
         "reports": removed_reports,
         "expired_kv": expired_kv,
         **telemetry,
+        "leads": purge_expired_leads(),
     }
+
+
+# True while a retention purge's WAL checkpoint is still owed (the database was
+# busy); the next sweep retries it even when it deletes nothing new.
+_lead_checkpoint_pending = False
+
+
+def purge_expired_leads() -> int:
+    """Apply EOLKITS_LEAD_RETENTION_DAYS: delete lead rows captured more than that
+    many days ago and return how many went. Unset or 0 (the default) is a no-op
+    that does not touch the database. Runs as the last step of the retention
+    sweep, so a failure here cannot skip the upload/report/telemetry cleanup."""
+    global _lead_checkpoint_pending
+    days = settings.lead_retention_days
+    if not days:
+        return 0
+    cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    result = store.purge_leads_before(cutoff)
+    if result["deleted"]:
+        logger.info(
+            "lead retention: purged %d lead row(s) older than %d days", result["deleted"], days
+        )
+        if result["unnotified"]:
+            logger.warning(
+                "lead retention: %d purged lead(s) had never been alerted to the owner",
+                result["unnotified"],
+            )
+    if result["deleted"] or _lead_checkpoint_pending:
+        _lead_checkpoint_pending = not store.checkpoint_wal()
+        if _lead_checkpoint_pending:
+            logger.warning(
+                "lead retention: WAL checkpoint deferred while the database was busy; "
+                "the next sweep retries it"
+            )
+    return result["deleted"]
 
 
 def _upload_path(upload_id: str) -> Path:
@@ -2298,7 +2513,7 @@ def _fulfill_audit(result: dict[str, Any], job: dict[str, Any]) -> None:
         hashlib.sha256,
     ).hexdigest()
     report_path = settings.reports_dir / f"{report_id}.pdf"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_directory(report_path.parent)
     pdf_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
     _atomic_write_bytes(report_path, pdf_bytes)
     store.put_json(
@@ -2393,6 +2608,7 @@ def _atomic_write_bytes(path: Path, content: bytes) -> None:
     temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     try:
         with temporary.open("xb") as handle:
+            os.fchmod(handle.fileno(), 0o600)
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())

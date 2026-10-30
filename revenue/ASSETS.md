@@ -46,6 +46,14 @@ All code and evidence below is inside the workspace jail.
   pass, along with real Action fixtures, three property cases, and deterministic
   scanner checks. Node runtime and IaC paths now include nodejs22.x and target
   nodejs24.x. Commands remain dry-run unless an apply flag is supplied.
+- August 31 correction: `lambda-lifeline`'s live-scan runtime tables were
+  missing `python3.8` entirely, so a real scan of a Lambda function on that
+  runtime would have reported it as healthy (a false negative) instead of at
+  risk. Fixed using two already-corroborating internal sources
+  (`python-pivot`'s `RUNTIME_TABLE` and `rules/public/deprecations.yml`'s
+  existing `lambda-python-3.8-eol` entry) and covered by a new fixture case;
+  see DECISIONS D52. This closes a real detection gap in the free product
+  buyers evaluate before purchasing Audit, not a documentation-only fix.
 - $0 deploy/distribution: public GitHub repository and the existing GitHub
   Marketplace Action listing.
 - Distribution state: the tested `v2` release branch is public and resolves to
@@ -448,3 +456,168 @@ AWS access is included.
 The smallest sellable unit is unchanged: one automated, static, source-only
 Audit v2 PDF for one repository ZIP or supported source file at $299. Public
 distribution improved; observed paid demand and collected revenue did not.
+
+## Branch reconciliation and second scanner correctness fix — September 1, 2026
+
+- Reconciled `marketing-machine-v2` with `origin/main`'s three merged PRs
+  (#28-#30: VS v1.2.0 reposition/publication, operator legal identity,
+  authorized-ops attempt). See METRICS.md and DECISIONS D56 for the full
+  merge/renumbering record.
+- Asset 2 (local kits and GitHub Action) correction: `lambda-lifeline`'s
+  live-scan runtime tables were missing `python3.11` entirely, the same
+  defect class as the `python3.8` gap fixed in D52. Two already-corroborating
+  internal sources (`rules/public/deprecations.yml`'s existing
+  `lambda-python-3.11-eol` entry and `python-pivot`'s `RUNTIME_TABLE`) agreed
+  on identical dates. Fixed with a new regression-test fixture case; 28/28
+  Node tests and 3/3 property tests stayed green; `npm pack --dry-run` still
+  reports 24 release files. This closes a second real detection gap in the
+  free product buyers evaluate before purchasing Audit.
+- Asset 3 (VS Code extension): now confirmed at public `1.2.0`,
+  "AWS Lambda EOL Scanner — EOLkits", per the merged `main` evidence
+  (103 installs / 199 downloads baseline, five-day gate
+  `2026-09-05T23:27:55Z`).
+- Asset 6 (content/legal): legal pages now identify Toledo Technologies LLC,
+  Connecticut, `hello@toledotechnologies.com`. Business mailing address,
+  governing jurisdiction, actual Stripe account facts, and incremental
+  hosting cost remain unknown and are not guessed.
+- No asset's completeness, license, or monetization frame changed beyond
+  these correctness/identity facts. Collected revenue remains $0.
+
+## Full local/public re-analysis and release candidate — September 4, 2026
+
+- **Public web acquisition:** the clean Pages origin, browser scanner, Audit
+  scope/sample, and schedule page all return 200. The Audit page previously
+  buried its readiness gate and called `eolkitsTrack` without loading
+  `track.js`; the source now places the price/readiness decision block before
+  long-form proof, loads first-party tracking, adds canonical/social metadata,
+  uses mobile-safe inputs, and routes the search-visible Lambda schedule page
+  to a source-linked $299 Audit/sample card. Only those two materially changed
+  URLs receive a September 4 sitemap `lastmod`; the false whole-site
+  September 2/4 publication churn is reversed.
+- **VS Code acquisition:** public v1.2.0 remains the last externally observed
+  version while v1.3.0 is prepared. The candidate closes real false negatives:
+  CloudFormation/SAM now include Node.js 16 and Python 3.8, and literal
+  runtimes inside `aws_lambda_function` Terraform blocks are scanned without
+  treating unrelated Terraform `runtime` variables/resources as Lambda. A
+  finding now offers a direct, attributed $299-report path. The extension
+  still runs locally with no telemetry or AWS credentials.
+- **Local kit / Action:** `lambda-lifeline` machine output now distinguishes
+  `at_risk` from actual `eol` and reports an explicit lifecycle. Future
+  Node/Python/Java dates are no longer mislabeled already EOL; the previously
+  missing `provided.al2` and `java8.al2` phase dates now match AWS's current
+  table. A cross-stack test enforces exact date parity among the public YAML,
+  Lambda Lifeline, and Python Pivot. The Action's first-run example is now
+  read-only and nonblocking; enforcement and PR comments are deliberate
+  follow-up choices.
+- **Evidence system:** Microsoft's public Gallery API returned alternating 103
+  and 104 install values in near-simultaneous cache-busted reads. The prepared
+  workflow therefore takes five samples, records every value, uses the minimum
+  as its lower bound, and treats post-gate replica disagreement as
+  inconclusive—not demand. This repairs the stale hard-coded 166-download
+  baseline text as well.
+- **Paid asset:** the smallest sellable unit remains one automated, static,
+  source-only Audit v2 PDF for one repository ZIP or supported source file at
+  $299. Its code is complete; its public money path remains intentionally
+  closed until the owner-only GRACE, legal, catalog, delivery, refund,
+  retention, and host-injection gates in `HUMAN_QUEUE.md` pass. Observed
+  revenue and profit remain $0.
+
+## Public v1.3 and live acquisition surfaces — September 4, 2026
+
+- **VS Code extension:** v1.3.0 is now public on the existing
+  `rupture.rupture-vscode` identity. The public package manifest was verified
+  from the version-specific Marketplace package endpoint, and five subsequent
+  exact-ID Gallery samples agreed on v1.3.0, 104 installs, and 226 downloads.
+  That is a one-install lower-bound increase over the retained 103-install
+  baseline, not revenue. The one-use automatic publisher has been removed;
+  future publication again requires the explicit owner-dispatch confirmation.
+- **Static acquisition surfaces:** the rebuilt Pages Audit and Lambda schedule
+  URLs return HTTP 200 and contain the reviewed first-party tracker path,
+  pre-upload assurances, qualified $299-interest path, and source attribution.
+  They are usable acquisition assets, but neither traffic nor a purchase has
+  yet been observed from them.
+- **Release integrity:** the repair tree passed every repository PR gate and
+  all seven `main` workflows. The dedicated dependency audit was moved to
+  Node 24/npm 11 and package-lock-only mode after npm 10's retired quick-audit
+  path failed; ordinary installs disable incidental audit calls while the
+  fail-closed security job remains mandatory.
+- **Paid asset state:** Audit v2 remains code-complete but not sellable until
+  the GRACE, injection, delivery, refund, retention, legal/facts, and new-catalog
+  gates in `HUMAN_QUEUE.md` pass. Collected revenue and profit remain $0.
+
+## Closed-deployment hardening and resolved seller identity — September 4, 2026
+
+- **Audit runner boundary:** stdin/inline execution still supports a reviewed
+  local path, but the network-facing runner now accepts only `audit_pdf`,
+  requires a signed upload URL, rejects every client-supplied local path, binds
+  to loopback by default, requires a 32-byte-or-longer bearer token, suppresses
+  request-target logging, and returns no exception internals to clients.
+- **Private fulfillment data:** GRACE rejects unsafe data-directory/database
+  path types, forces runtime directories to mode 0700 and database/upload/report
+  files to mode 0600, and creates report temporaries under an owner-only umask.
+- **Container/deploy surface:** the API and runner use explicit digest-pinned
+  Python 3.12.14 bookworm images, numeric non-root users, read-only filesystems,
+  no Linux capabilities, `no-new-privileges`, bounded processes/CPU/memory, and
+  a noexec temporary filesystem. The reviewed Caddy block omits signed-upload
+  requests from access logs. A guarded checkout-closed deploy wrapper verifies
+  the exact host/tree/SHA/current volume, preflights without the data volume,
+  snapshots before mutation, verifies post-deploy capabilities, and restores
+  the prior image on failure without ever opening checkout or restoring data.
+- **Seller/legal facts:** Connecticut's official registry establishes Toledo
+  Technologies LLC at 2389 Main St. STE 100, Glastonbury, CT 06033, United
+  States. Terms, privacy, and DPA now use that public business/mailing address;
+  the terms select Connecticut law subject to mandatory consumer protections.
+  Stripe account pricing/currencies and incremental GRACE cost remain private
+  facts in HQ-B.
+- **Repository administration:** Pages now uses GitHub Actions exclusively;
+  active ruleset `22266277` blocks deletion and non-fast-forward updates on the
+  default branch and `v2`. The former three-minute HQ-F is complete.
+
+The smallest sellable unit and ranking are unchanged: one automated,
+source-only Audit v2 PDF at $299. These changes reduce launch risk and owner
+error; they are not demand. They are merged on `main` through PR #44 at
+`5bbf5a949148cd9f359d07aad03f649358c37e8c`, with both real container builds
+green. Checkout remains closed, and workspace-observed revenue/profit remain
+$0.
+
+## Repository-discovery boundary — September 4, 2026
+
+- The public repository now has 20 preserved, product-specific topics including
+  the newly added `github-actions` label for the already-shipped Action. Its
+  truthful description, Pages homepage, issues, and discussions were already
+  configured; they did not need another rewrite.
+- The VS asset already appears first or second for seven tested high-intent AWS
+  deprecation/EOL searches and seventh for broad `aws lambda`. Another
+  keyword-only package is not a new sellable unit and has no evidence-backed
+  acquisition advantage.
+- No EOLkits instance exists in the connected Sites inventory. A second beta
+  host would duplicate the static surface while leaving the actual paid
+  deployment, payment, delivery, refund, and retention gates closed.
+- The smallest sellable unit remains one automated, source-only Audit v2 PDF at
+  $299. No asset became purchasable in this cycle; observed revenue and profit
+  remain $0.
+
+## Final merged asset state — September 4, 2026
+
+The discovery audit is merged on `main` at `734b2d007e890fb0e2c53bdc746ce144dcfdefe2`
+with all PR and merge-SHA product gates green. The static deployment branch
+resolves to the same commit, the public repository retains 20 topics including
+`github-actions`, and Action release draft `375063073` still targets protected
+`v2` exactly. The later cleanup containment failure changed no product asset;
+its deleted feature-branch commits remain in `main`. The $299 Audit remains the
+smallest sellable unit and remains unavailable until the owner-only launch gates
+pass.
+
+## Environment-asset recovery result — September 4, 2026
+
+No usable environment or credential asset exists inside the current workspace.
+The sole `.env`-style file is a synthetic, checkout-disabled Compose-validation
+fixture. GitHub Environments, Dependabot, Codespaces, ignored files, archives,
+Git history, current process variables, and workspace-local Chrome snapshots add
+no GRACE, Stripe, Resend, DEV, catalog, or admin authority. Historical secret
+shapes are tests/placeholders or retired Stripe material and are not assets.
+
+A git-ignored secure inbox at `tmp/owner-env-import/` is ready for copies of the
+owner-reported external env files. Until that import happens, Audit v2 remains
+code-complete but operationally unavailable; the sellable unit and $0 observed
+revenue are unchanged.
